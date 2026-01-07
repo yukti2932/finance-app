@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WealthFolio V3 | Editable Edition</title>
+    <title>WealthFolio V4 | PIN 2932</title>
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
@@ -119,7 +119,8 @@
         };
 
         function attemptLogin() {
-            if(document.getElementById('pin-input').value === "0000") {
+            // UPDATED PIN HERE
+            if(document.getElementById('pin-input').value === "2932") {
                 document.getElementById('lock-screen').classList.add('unlocked');
                 setTimeout(() => renderTab('dashboard'), 500);
             } else document.getElementById('login-msg').innerText = "Wrong PIN";
