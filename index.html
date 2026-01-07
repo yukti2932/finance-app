@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WealthFolio V2 | INR Edition</title>
+    <title>WealthFolio V3 | Editable Edition</title>
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
@@ -27,7 +27,7 @@
         body { transition: background-color 0.3s, color 0.3s; }
         .glass-panel { background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(12px); border: 1px solid rgba(0,0,0,0.05); }
         .dark .glass-panel { background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(255,255,255,0.05); }
-        .fade-in { animation: fadeIn 0.4s ease-out; }
+        .fade-in { animation: fadeIn 0.3s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         
@@ -52,7 +52,7 @@
                 <button onclick="attemptLogin()" class="bg-wealth hover:bg-emerald-600 text-white p-3 rounded"><i data-lucide="arrow-right"></i></button>
             </div>
             <p id="login-msg" class="text-red-500 text-xs h-4"></p>
-            <p class="text-xs text-slate-600 mt-8">Default: 0000</p>
+            <p class="text-xs text-slate-600 mt-8">Default: 2932</p>
         </div>
     </div>
 
@@ -107,14 +107,14 @@
         let state = { transactions: [], investments: [], goals: [], gigs: [], settings: { theme: 'dark' } };
         const ACCOUNTS = ['SBI', 'Union', 'HDFC', 'PayPal', 'Cash', 'Upwork', 'Other'];
         const CURRENCIES = ['INR', 'USD', 'EUR', 'GBP'];
-        let cachedRates = { INR: 1 }; // Default fallback
+        let cachedRates = { INR: 1 };
+        let editIndex = null; // Global to track what is being edited
 
         window.onload = () => {
             if(localStorage.getItem('wf_data')) state = JSON.parse(localStorage.getItem('wf_data'));
             if(state.settings.theme === 'dark') document.documentElement.classList.add('dark');
             lucide.createIcons();
             document.getElementById('pin-input').addEventListener('keypress', (e) => { if(e.key === 'Enter') attemptLogin(); });
-            // Fetch rates silently
             fetch('https://api.exchangerate-api.com/v4/latest/USD').then(r=>r.json()).then(d=>{cachedRates=d.rates;});
         };
 
@@ -177,7 +177,7 @@
             }, 100);
         }
 
-        // --- CASH FLOW (With Smart Income) ---
+        // --- CASH FLOW (With Edit) ---
         function renderCashFlow(c) {
             c.innerHTML = `
                 <div class="fade-in space-y-4">
@@ -187,16 +187,21 @@
                     </div>
                     <div class="bg-white dark:bg-cardDark rounded-xl shadow overflow-hidden border border-gray-200 dark:border-slate-700">
                         ${state.transactions.length===0 ? '<div class="p-8 text-center opacity-50">Nothing yet.</div>' : state.transactions.map((t,i)=>`
-                            <div class="flex justify-between items-center p-4 border-b border-gray-100 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800/50">
+                            <div class="flex justify-between items-center p-4 border-b border-gray-100 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800/50 group">
                                 <div>
                                     <div class="font-bold text-slate-800 dark:text-slate-200">${t.title} <span class="text-xs font-normal text-slate-400">(${t.acc})</span></div>
                                     <div class="text-xs text-slate-400">${t.date} • ${t.category}</div>
                                 </div>
-                                <div class="text-right">
-                                    <div class="font-mono font-bold ${t.type==='income'?'text-wealth':'text-red-500'}">${t.type==='income'?'+':'-'}${formatMoney(t.amount)}</div>
-                                    ${t.originalCurrency && t.originalCurrency!=='INR' ? `<div class="text-[10px] text-slate-500">from ${t.originalAmt} ${t.originalCurrency}</div>` : ''}
+                                <div class="flex items-center gap-4">
+                                    <div class="text-right">
+                                        <div class="font-mono font-bold ${t.type==='income'?'text-wealth':'text-red-500'}">${t.type==='income'?'+':'-'}${formatMoney(t.amount)}</div>
+                                        ${t.originalCurrency && t.originalCurrency!=='INR' ? `<div class="text-[10px] text-slate-500">from ${t.originalAmt} ${t.originalCurrency}</div>` : ''}
+                                    </div>
+                                    <div class="flex gap-2 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button onclick="openEditTxModal(${i})" class="text-slate-400 hover:text-wealth"><i data-lucide="pencil" size="16"></i></button>
+                                        <button onclick="deleteTx(${i})" class="text-slate-400 hover:text-red-500"><i data-lucide="trash-2" size="16"></i></button>
+                                    </div>
                                 </div>
-                                <button onclick="deleteTx(${i})" class="ml-4 text-slate-300 hover:text-red-500"><i data-lucide="trash-2" size="14"></i></button>
                             </div>
                         `).join('')}
                     </div>
@@ -204,34 +209,44 @@
             `;
         }
 
-        // --- GIGS TRACKER ---
+        // --- GIGS TRACKER (With Edit) ---
         function renderGigs(c) {
             if(!state.gigs) state.gigs = [];
             c.innerHTML = `
                 <div class="fade-in">
-                    <button onclick="addGig()" class="w-full py-3 mb-6 border-2 border-dashed border-gray-300 dark:border-slate-600 text-slate-500 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-800 font-bold">+ NEW FREELANCE GIG</button>
+                    <button onclick="openGigModal()" class="w-full py-3 mb-6 border-2 border-dashed border-gray-300 dark:border-slate-600 text-slate-500 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-800 font-bold">+ NEW FREELANCE GIG</button>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                         ${['active', 'paused', 'dropped'].map(status => `
                             <div class="space-y-4">
                                 <h3 class="font-bold text-xs uppercase tracking-widest text-slate-500 border-b pb-2 ${status==='active'?'border-green-500':status==='paused'?'border-yellow-500':'border-red-500'}">${status}</h3>
-                                ${state.gigs.filter(g => g.status === status).map(g => `
+                                ${state.gigs.filter(g => g.status === status).map((g) => {
+                                    // Find index in main array for editing
+                                    let trueIndex = state.gigs.findIndex(x => x.id === g.id);
+                                    return `
                                     <div class="bg-white dark:bg-cardDark p-4 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 relative group">
                                         <div class="flex justify-between mb-2">
                                             <h4 class="font-bold text-slate-800 dark:text-white">${g.name}</h4>
-                                            <button onclick="editGigStatus('${g.id}')" class="text-xs bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded opacity-50 hover:opacity-100">Move</button>
+                                            <div class="flex gap-2">
+                                                <button onclick="openGigModal(${trueIndex})" class="text-slate-400 hover:text-wealth"><i data-lucide="pencil" size="14"></i></button>
+                                            </div>
                                         </div>
                                         <div class="text-xs text-slate-400 mb-3 line-clamp-2">${g.notes || 'No description.'}</div>
                                         <div class="flex justify-between items-center text-xs font-mono text-slate-500">
                                             <span>EARNED: ${formatMoney(g.earned || 0)}</span>
                                         </div>
                                     </div>
-                                `).join('')}
+                                `}).join('')}
                                 ${state.gigs.filter(g => g.status === status).length === 0 ? '<div class="text-xs text-slate-600 italic">Empty</div>' : ''}
                             </div>
                         `).join('')}
                     </div>
                 </div>
             `;
+        }
+
+        // --- GOALS (With Edit) ---
+        function renderGoals(c) {
+            c.innerHTML = `<div class="fade-in space-y-6"><button onclick="openGoalModal()" class="bg-wealth text-white px-4 py-2 rounded shadow font-bold text-sm">+ New Goal</button>${state.goals.map((g,i)=>{const pct=Math.min(100, Math.round((g.current/g.target)*100)); return `<div class="bg-white dark:bg-cardDark p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 group"> <div class="flex justify-between items-end mb-2"><div><h4 class="font-bold text-lg text-slate-800 dark:text-white flex items-center gap-2">${g.title} <button onclick="openGoalModal(${i})" class="opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 hover:text-wealth"><i data-lucide="pencil" size="14"></i></button> <button onclick="deleteGoal(${i})" class="opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 hover:text-red-500"><i data-lucide="trash-2" size="14"></i></button></h4></div> <div class="text-right"><span class="text-2xl font-bold font-mono text-wealth">${pct}%</span></div></div> <div class="w-full bg-gray-200 dark:bg-slate-700 h-3 rounded-full overflow-hidden"><div class="bg-wealth h-full rounded-full" style="width:${pct}%"></div></div> <div class="mt-2 text-xs text-slate-500 flex justify-between"><span>Saved: ${formatMoney(g.current)}</span><span>Target: ${formatMoney(g.target)}</span></div></div>`;}).join('')}</div>`;
         }
 
         // --- CONVERTER ---
@@ -256,7 +271,7 @@
                     <div class="text-center text-[10px] text-slate-400">Rates updated dynamically based on open APIs.</div>
                 </div>
             `;
-            setTimeout(runConversion, 500); // Wait for fetch
+            setTimeout(runConversion, 500); 
         }
 
         // --- CALENDAR ---
@@ -266,7 +281,6 @@
             const month = today.getMonth();
             const daysInMonth = new Date(year, month + 1, 0).getDate();
             const firstDay = new Date(year, month, 1).getDay();
-            
             let gridHtml = '';
             for(let i=0; i<firstDay; i++) gridHtml += `<div></div>`;
             for(let d=1; d<=daysInMonth; d++) {
@@ -274,45 +288,25 @@
                 const hasData = state.transactions.some(t => t.date === dateStr);
                 gridHtml += `<div onclick="alert('Activity on ${dateStr}:\\n' + (state.transactions.filter(t=>t.date==='${dateStr}').map(t=>t.title + ': ' + t.amount).join('\\n') || 'None'))" class="cal-day bg-white dark:bg-cardDark shadow-sm border border-gray-100 dark:border-slate-700 ${hasData?'has-data':''}">${d}</div>`;
             }
-
-            c.innerHTML = `
-                <div class="fade-in max-w-lg mx-auto">
-                    <div class="text-center mb-6 font-bold text-xl uppercase tracking-widest text-slate-500">${new Date(year, month).toLocaleString('default', { month: 'long' })} ${year}</div>
-                    <div class="calendar-grid text-slate-600 dark:text-slate-300 font-mono font-bold">
-                        ${['S','M','T','W','T','F','S'].map(d=>`<div class="text-center text-xs py-2 text-wealth">${d}</div>`).join('')}
-                        ${gridHtml}
-                    </div>
-                </div>
-            `;
+            c.innerHTML = `<div class="fade-in max-w-lg mx-auto"><div class="text-center mb-6 font-bold text-xl uppercase tracking-widest text-slate-500">${new Date(year, month).toLocaleString('default', { month: 'long' })} ${year}</div><div class="calendar-grid text-slate-600 dark:text-slate-300 font-mono font-bold">${['S','M','T','W','T','F','S'].map(d=>`<div class="text-center text-xs py-2 text-wealth">${d}</div>`).join('')}${gridHtml}</div></div>`;
         }
         
-        // --- GOALS (Existing Logic) ---
-        function renderGoals(c) {
-            c.innerHTML = `<div class="fade-in space-y-6"><button onclick="addGoal()" class="bg-wealth text-white px-4 py-2 rounded shadow font-bold text-sm">+ New Goal</button>${state.goals.map((g,i)=>{const pct=Math.min(100, Math.round((g.current/g.target)*100)); return `<div class="bg-white dark:bg-cardDark p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700"> <div class="flex justify-between items-end mb-2"><div><h4 class="font-bold text-lg text-slate-800 dark:text-white">${g.title} <button onclick="state.goals.splice(${i},1);saveData()" class="text-red-400 ml-2">x</button></h4></div> <div class="text-right"><span class="text-2xl font-bold font-mono text-wealth">${pct}%</span></div></div> <div class="w-full bg-gray-200 dark:bg-slate-700 h-3 rounded-full overflow-hidden"><div class="bg-wealth h-full rounded-full" style="width:${pct}%"></div></div> <div class="mt-2 text-xs text-slate-500 flex justify-between"><span>Saved: ${formatMoney(g.current)}</span><span>Target: ${formatMoney(g.target)}</span></div></div>`;}).join('')}</div>`;
-        }
-
         // --- LOGIC FUNCTIONS ---
         async function runConversion() {
             const amt = parseFloat(document.getElementById('conv-amt').value) || 0;
             const from = document.getElementById('conv-from').value;
             const to = document.getElementById('conv-to').value;
-            
-            let rate = 1;
-            // Simple cross rate calculation if USD base is cached
             if(cachedRates[from] && cachedRates[to]) {
                 const inUSD = amt / cachedRates[from];
                 const final = inUSD * cachedRates[to];
                 document.getElementById('conv-result').innerText = `${final.toFixed(2)} ${to}`;
             } else {
-                // Fallback fetch if not cached (e.g. newly loaded)
                 try {
                     const req = await fetch(`https://api.exchangerate-api.com/v4/latest/${from}`);
                     const data = await req.json();
                     const final = amt * data.rates[to];
                     document.getElementById('conv-result').innerText = `${final.toFixed(2)} ${to}`;
-                } catch(e) {
-                    document.getElementById('conv-result').innerText = "API Error";
-                }
+                } catch(e) { document.getElementById('conv-result').innerText = "API Error"; }
             }
         }
 
@@ -322,22 +316,65 @@
             return inc - exp;
         }
 
-        // --- MODALS ---
+        // --- MODAL & EDIT LOGIC ---
         function openIncomeModal() {
-            const m = document.getElementById('modal'); m.classList.remove('hidden');
-            document.getElementById('modal-title').innerText = "Add Income";
-            document.getElementById('modal-content').innerHTML = `
-                <input id="in-desc" placeholder="Description (e.g. Freelance Payment)" class="w-full p-2 bg-transparent border-b border-gray-300 dark:border-slate-600 outline-none text-slate-800 dark:text-white">
+            editIndex = null;
+            renderModalContent("Add Income", getIncomeFormHTML(), saveIncome);
+        }
+
+        function openExpenseModal() {
+            editIndex = null;
+            renderModalContent("Add Expense", getExpenseFormHTML(), saveExpense);
+        }
+
+        function openEditTxModal(index) {
+            editIndex = index;
+            const t = state.transactions[index];
+            const isInc = t.type === 'income';
+            renderModalContent(isInc ? "Edit Income" : "Edit Expense", isInc ? getIncomeFormHTML(t) : getExpenseFormHTML(t), isInc ? saveIncome : saveExpense);
+        }
+
+        function openGigModal(index = null) {
+            editIndex = index;
+            const g = index !== null ? state.gigs[index] : { name: '', status: 'active', earned: 0, notes: '' };
+            renderModalContent(index !== null ? "Edit Gig" : "New Gig", `
+                <input id="g-name" value="${g.name}" placeholder="Gig Name" class="w-full p-2 bg-transparent border-b border-gray-300 dark:border-slate-600 outline-none text-slate-800 dark:text-white">
+                <select id="g-status" class="w-full mt-2 p-2 bg-transparent border-b border-gray-300 dark:border-slate-600 outline-none text-slate-500">
+                    <option value="active" ${g.status==='active'?'selected':''}>Active</option>
+                    <option value="paused" ${g.status==='paused'?'selected':''}>Paused</option>
+                    <option value="dropped" ${g.status==='dropped'?'selected':''}>Dropped</option>
+                </select>
+                <input id="g-earned" type="number" value="${g.earned}" placeholder="Total Earned (₹)" class="w-full mt-2 p-2 bg-transparent border-b border-gray-300 dark:border-slate-600 outline-none font-mono">
+                <textarea id="g-notes" placeholder="Notes..." class="w-full mt-2 p-2 bg-transparent border border-gray-300 dark:border-slate-600 rounded text-sm h-20">${g.notes}</textarea>
+            `, saveGig);
+        }
+
+        function openGoalModal(index = null) {
+            editIndex = index;
+            const g = index !== null ? state.goals[index] : { title: '', target: '', current: 0 };
+            renderModalContent(index !== null ? "Edit Goal" : "New Goal", `
+                <input id="go-title" value="${g.title}" placeholder="Goal Name" class="w-full p-2 bg-transparent border-b border-gray-300 dark:border-slate-600 outline-none text-slate-800 dark:text-white">
+                <input id="go-target" type="number" value="${g.target}" placeholder="Target Amount" class="w-full mt-2 p-2 bg-transparent border-b border-gray-300 dark:border-slate-600 outline-none font-mono">
+                <input id="go-current" type="number" value="${g.current}" placeholder="Current Saved" class="w-full mt-2 p-2 bg-transparent border-b border-gray-300 dark:border-slate-600 outline-none font-mono">
+            `, saveGoal);
+        }
+
+        // --- FORM HELPERS ---
+        function getIncomeFormHTML(t = {}) {
+            return `
+                <input id="in-desc" value="${t.title||''}" placeholder="Description" class="w-full p-2 bg-transparent border-b border-gray-300 dark:border-slate-600 outline-none text-slate-800 dark:text-white">
                 <div class="flex gap-2">
-                    <input id="in-amt" type="number" placeholder="Amount" class="flex-1 p-2 bg-transparent border-b border-gray-300 dark:border-slate-600 outline-none font-mono">
+                    <input id="in-amt" type="number" value="${t.amount||''}" placeholder="Amount" class="flex-1 p-2 bg-transparent border-b border-gray-300 dark:border-slate-600 outline-none font-mono">
                     <select id="in-curr" class="bg-transparent border-b border-gray-300 dark:border-slate-600 outline-none text-xs">
-                        ${CURRENCIES.map(c=>`<option value="${c}">${c}</option>`).join('')}
+                        ${CURRENCIES.map(c=>`<option value="${c}" ${t.originalCurrency===c?'selected':''}>${c}</option>`).join('')}
                     </select>
                 </div>
                 <select id="in-acc" class="w-full mt-2 p-2 bg-transparent border-b border-gray-300 dark:border-slate-600 outline-none text-slate-500">
-                    <option value="" disabled selected>Select Account</option>
-                    ${ACCOUNTS.map(a=>`<option value="${a}">${a}</option>`).join('')}
+                    <option value="" disabled ${!t.acc?'selected':''}>Select Account</option>
+                    ${ACCOUNTS.map(a=>`<option value="${a}" ${t.acc===a?'selected':''}>${a}</option>`).join('')}
                 </select>
+                <input id="in-date" type="date" value="${t.date||new Date().toISOString().split('T')[0]}" class="w-full mt-2 p-2 bg-transparent border-b border-gray-300 dark:border-slate-600 outline-none text-slate-500">
+                ${editIndex===null ? `
                 <div class="mt-4 pt-4 border-t border-dashed border-gray-300 dark:border-slate-700">
                     <label class="flex items-center gap-2 text-sm text-slate-500 mb-2">
                         <input type="checkbox" id="in-save-check" onchange="document.getElementById('save-opts').classList.toggle('hidden')"> Add to Savings Goal?
@@ -348,66 +385,92 @@
                         </select>
                         <input id="in-save-amt" type="number" placeholder="Amount to Save (₹)" class="w-full p-2 bg-gray-100 dark:bg-slate-800 rounded text-xs">
                     </div>
-                </div>
+                </div>` : ''}
             `;
-            document.getElementById('modal-action-btn').onclick = async () => {
-                const desc = document.getElementById('in-desc').value;
-                let amt = parseFloat(document.getElementById('in-amt').value);
-                const curr = document.getElementById('in-curr').value;
-                const acc = document.getElementById('in-acc').value;
-                
-                // Convert to INR if needed
-                let originalAmt = amt;
-                if(curr !== 'INR') {
-                     // Try to fetch rate, else ask user? For now, use cached or 1
-                     let rate = 1;
-                     if(cachedRates[curr]) rate = 1 / cachedRates[curr]; // Inverse of USD base... actually let's just do a quick fetch
-                     try { const r = await fetch(`https://api.exchangerate-api.com/v4/latest/${curr}`); const d = await r.json(); rate = d.rates['INR']; } catch(e){}
-                     amt = Math.round(amt * rate);
-                }
+        }
 
-                if(desc && amt) {
-                    state.transactions.unshift({
-                        id: Date.now(), title: desc, amount: amt, type: 'income', category: 'General', 
-                        date: new Date().toISOString().split('T')[0], acc: acc, originalAmt: originalAmt, originalCurrency: curr
-                    });
-                    
-                    // Handle Savings Split
-                    if(document.getElementById('in-save-check').checked) {
+        function getExpenseFormHTML(t = {}) {
+            return `
+                <input id="ex-desc" value="${t.title||''}" placeholder="Description" class="w-full p-2 bg-transparent border-b border-gray-300 dark:border-slate-600 outline-none text-slate-800 dark:text-white">
+                <input id="ex-amt" type="number" value="${t.amount||''}" placeholder="Amount (INR)" class="w-full p-2 bg-transparent border-b border-gray-300 dark:border-slate-600 outline-none font-mono mt-2">
+                <select id="ex-acc" class="w-full mt-2 p-2 bg-transparent border-b border-gray-300 dark:border-slate-600 outline-none text-slate-500">
+                    ${ACCOUNTS.map(a=>`<option value="${a}" ${t.acc===a?'selected':''}>${a}</option>`).join('')}
+                </select>
+                <input id="ex-date" type="date" value="${t.date||new Date().toISOString().split('T')[0]}" class="w-full mt-2 p-2 bg-transparent border-b border-gray-300 dark:border-slate-600 outline-none text-slate-500">
+            `;
+        }
+
+        // --- SAVE HANDLERS ---
+        function renderModalContent(title, html, saveFn) {
+            const m = document.getElementById('modal'); m.classList.remove('hidden');
+            document.getElementById('modal-title').innerText = title;
+            document.getElementById('modal-content').innerHTML = html;
+            document.getElementById('modal-action-btn').onclick = () => { saveFn(); };
+        }
+
+        async function saveIncome() {
+            const desc = document.getElementById('in-desc').value;
+            let amt = parseFloat(document.getElementById('in-amt').value);
+            const curr = document.getElementById('in-curr').value;
+            const acc = document.getElementById('in-acc').value;
+            const date = document.getElementById('in-date').value;
+            let originalAmt = amt;
+
+            if(curr !== 'INR') {
+                 // Simple conversion fallback if logic needed
+                 let rate = 1;
+                 try { const r = await fetch(`https://api.exchangerate-api.com/v4/latest/${curr}`); const d = await r.json(); rate = d.rates['INR']; } catch(e){}
+                 amt = Math.round(amt * rate);
+            }
+
+            if(desc && amt) {
+                const tx = { id: editIndex!==null ? state.transactions[editIndex].id : Date.now(), title: desc, amount: amt, type: 'income', category: 'General', date: date, acc: acc, originalAmt: originalAmt, originalCurrency: curr };
+                if(editIndex !== null) state.transactions[editIndex] = tx;
+                else {
+                    state.transactions.unshift(tx);
+                    // Savings logic only on NEW
+                    if(document.getElementById('in-save-check') && document.getElementById('in-save-check').checked) {
                         const saveAmt = parseFloat(document.getElementById('in-save-amt').value);
                         const goalIdx = document.getElementById('in-goal-id').value;
                         if(saveAmt && state.goals[goalIdx]) {
                             state.goals[goalIdx].current += saveAmt;
-                            // Add a transaction for the transfer?
-                            state.transactions.unshift({
-                                id: Date.now()+1, title: `Transfer to ${state.goals[goalIdx].title}`, amount: saveAmt, 
-                                type: 'expense', category: 'Savings', date: new Date().toISOString().split('T')[0], acc: acc
-                            });
+                            state.transactions.unshift({ id: Date.now()+1, title: `Transfer to ${state.goals[goalIdx].title}`, amount: saveAmt, type: 'expense', category: 'Savings', date: date, acc: acc });
                         }
                     }
-                    saveData(); closeModal();
                 }
-            };
-        }
-
-        function openExpenseModal() {
-            const m = document.getElementById('modal'); m.classList.remove('hidden');
-            document.getElementById('modal-title').innerText = "Add Expense";
-            document.getElementById('modal-content').innerHTML = `
-                <input id="ex-desc" placeholder="Description" class="w-full p-2 bg-transparent border-b border-gray-300 dark:border-slate-600 outline-none text-slate-800 dark:text-white">
-                <input id="ex-amt" type="number" placeholder="Amount (INR)" class="w-full p-2 bg-transparent border-b border-gray-300 dark:border-slate-600 outline-none font-mono mt-2">
-                <select id="ex-acc" class="w-full mt-2 p-2 bg-transparent border-b border-gray-300 dark:border-slate-600 outline-none text-slate-500">${ACCOUNTS.map(a=>`<option value="${a}">${a}</option>`).join('')}</select>
-            `;
-            document.getElementById('modal-action-btn').onclick = () => {
-                const t = document.getElementById('ex-desc').value, a = parseFloat(document.getElementById('ex-amt').value), acc = document.getElementById('ex-acc').value;
-                if(t && a) { state.transactions.unshift({id: Date.now(), title:t, amount:a, type:'expense', category:'General', date: new Date().toISOString().split('T')[0], acc:acc}); saveData(); closeModal(); }
+                saveData(); closeModal();
             }
         }
 
-        function addGig() { const n = prompt("Gig Name (e.g. Website Design):"); if(n) { state.gigs.push({id:Date.now(), name:n, status:'active', earned:0, notes:''}); saveData(); } }
-        function editGigStatus(id) { const g = state.gigs.find(x=>x.id==id); const n = prompt("Status (active/paused/dropped):", g.status); if(n && ['active','paused','dropped'].includes(n.toLowerCase())) { g.status = n.toLowerCase(); saveData(); } }
-        function addGoal() { const n=prompt("Goal Name:"); const t=prompt("Target Amount:"); if(n&&t){ state.goals.push({title:n, target:parseFloat(t), current:0}); saveData(); } }
+        function saveExpense() {
+            const t = document.getElementById('ex-desc').value, a = parseFloat(document.getElementById('ex-amt').value), acc = document.getElementById('ex-acc').value, d = document.getElementById('ex-date').value;
+            if(t && a) { 
+                const tx = { id: editIndex!==null?state.transactions[editIndex].id:Date.now(), title:t, amount:a, type:'expense', category:'General', date:d, acc:acc };
+                if(editIndex!==null) state.transactions[editIndex] = tx; else state.transactions.unshift(tx);
+                saveData(); closeModal(); 
+            }
+        }
+
+        function saveGig() {
+            const n=document.getElementById('g-name').value, s=document.getElementById('g-status').value, e=parseFloat(document.getElementById('g-earned').value)||0, no=document.getElementById('g-notes').value;
+            if(n) {
+                const g = { id: editIndex!==null?state.gigs[editIndex].id:Date.now(), name:n, status:s, earned:e, notes:no };
+                if(editIndex!==null) state.gigs[editIndex] = g; else state.gigs.push(g);
+                saveData(); closeModal();
+            }
+        }
+
+        function saveGoal() {
+            const n=document.getElementById('go-title').value, t=parseFloat(document.getElementById('go-target').value), c=parseFloat(document.getElementById('go-current').value);
+            if(n && t) {
+                const g = { title:n, target:t, current:c||0 };
+                if(editIndex!==null) state.goals[editIndex] = g; else state.goals.push(g);
+                saveData(); closeModal();
+            }
+        }
+
         function deleteTx(i) { if(confirm("Delete?")) { state.transactions.splice(i,1); saveData(); } }
+        function deleteGoal(i) { if(confirm("Delete?")) { state.goals.splice(i,1); saveData(); } }
         function closeModal() { document.getElementById('modal').classList.add('hidden'); }
         function toggleTheme() { document.documentElement.classList.toggle('dark'); state.settings.theme = document.documentElement.classList.contains('dark') ? 'dark' : 'light'; saveData(); }
     </script>
