@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WealthFolio | Personal Finance</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"Inter"', 'sans-serif'],
+                        mono: ['"JetBrains Mono"', 'monospace'],
+                    },
+                    colors: {
+                        wealth: "#10b981", // Emerald 500
+                        darkBg: "#0f172a", // Slate 900
+                        cardDark: "#1e293b", // Slate 800
+                        accent: "#8b5cf6", // Violet 500
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        /* Custom Animations & Scrollbars */
+        body { transition: background-color 0.3s, color 0.3s; }
+        .glass-panel { background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.3); }
+        .dark .glass-panel { background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(255,255,255,0.05); }
+        .fade-in { animation: fadeIn 0.5s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        
+        /* Security Overlay */
+        #lock-screen { position: fixed; inset: 0; z-index: 100; background-color: #0f172a; display: flex; align-items: center; justify-content: center; transition: transform 0.5s ease-in-out; }
+        #lock-screen.unlocked { transform: translateY(-100%); }
+    </style>
+</head>
+<body class="bg-gray-50 text-slate-800 dark:bg-darkBg dark:text-slate-200 h-screen flex flex-col overflow-hidden">
+
+    <div id="lock-screen">
+        <div class="text-center space-y-6">
+            <div class="inline-flex items-center justify-center w-20 h-20 rounded-full bg-wealth/20 text-wealth mb-4">
+                <i data-lucide="lock" size="40"></i>
+            </div>
+            <h1 class="text-3xl font-bold text-white tracking-widest font-mono">WEALTHFOLIO</h1>
+            <p class="text-slate-400 text-sm">SECURE ENVIRONMENT</p>
+            <div class="flex gap-2 justify-center mt-4">
+                <input type="password" id="pin-input" maxlength="4" placeholder="PIN" class="bg-slate-800 border border-slate-700 text-center text-white text-2xl w-32 py-2 rounded focus:outline-none focus:border-wealth tracking-[0.5em] font-mono transition-all">
+                <button onclick="attemptLogin()" class="bg-wealth hover:bg-emerald-600 text-white p-3 rounded transition-colors"><i data-lucide="arrow-right"></i></button>
+            </div>
+            <p id="login-msg" class="text-red-500 text-xs h-4"></p>
+            <p class="text-xs text-slate-600 mt-8">Default PIN: 0000</p>
+        </div>
+    </div>
+
+    <div class="flex flex-1 overflow-hidden relative z-0">
+        
+        <nav class="w-20 md:w-64 bg-white dark:bg-cardDark border-r border-gray-200 dark:border-slate-700 flex flex-col justify-between z-20 shadow-lg shrink-0">
+            <div>
+                <div class="h-16 flex items-center justify-center md:justify-start md:px-6 border-b border-gray-100 dark:border-slate-700">
+                    <i data-lucide="gem" class="text-wealth shrink-0" size="28"></i>
+                    <span class="hidden md:block ml-3 font-bold text-lg tracking-tight">WealthFolio</span>
+                </div>
+                
+                <div class="flex flex-col gap-2 p-3 mt-4">
+                    <button onclick="renderTab('dashboard')" id="nav-dashboard" class="nav-btn active flex items-center p-3 rounded-lg text-slate-500 hover:bg-gray-100 dark:hover:bg-slate-700 transition-all">
+                        <i data-lucide="layout-dashboard" size="20"></i>
+                        <span class="hidden md:block ml-3 font-medium text-sm">Dashboard</span>
+                    </button>
+                    <button onclick="renderTab('cashflow')" id="nav-cashflow" class="nav-btn flex items-center p-3 rounded-lg text-slate-500 hover:bg-gray-100 dark:hover:bg-slate-700 transition-all">
+                        <i data-lucide="banknote" size="20"></i>
+                        <span class="hidden md:block ml-3 font-medium text-sm">Cash Flow</span>
+                    </button>
+                    <button onclick="renderTab('portfolio')" id="nav-portfolio" class="nav-btn flex items-center p-3 rounded-lg text-slate-500 hover:bg-gray-100 dark:hover:bg-slate-700 transition-all">
+                        <i data-lucide="trending-up" size="20"></i>
+                        <span class="hidden md:block ml-3 font-medium text-sm">Investments</span>
+                    </button>
+                    <button onclick="renderTab('goals')" id="nav-goals" class="nav-btn flex items-center p-3 rounded-lg text-slate-500 hover:bg-gray-100 dark:hover:bg-slate-700 transition-all">
+                        <i data-lucide="target" size="20"></i>
+                        <span class="hidden md:block ml-3 font-medium text-sm">Saving Goals</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="p-4 border-t border-gray-100 dark:border-slate-700">
+                <button onclick="toggleTheme()" class="flex items-center justify-center md:justify-start w-full p-2 text-slate-400 hover:text-wealth transition-colors">
+                    <i id="theme-icon" data-lucide="moon" size="20"></i>
+                    <span class="hidden md:block ml-3 text-xs font-bold uppercase">Theme</span>
+                </button>
+            </div>
+        </nav>
+
+        <main class="flex-1 overflow-y-auto bg-gray-50 dark:bg-[#0f172a] relative">
+            
+            <header class="sticky top-0 z-10 glass-panel px-8 py-4 flex justify-between items-center shadow-sm">
+                <h2 id="page-title" class="text-xl font-bold font-mono text-slate-700 dark:text-slate-200">OVERVIEW</h2>
+                <div class="flex items-center gap-4">
+                    <div class="text-right hidden sm:block">
+                        <div class="text-[10px] uppercase text-slate-400 font-bold tracking-wider">Net Worth</div>
+                        <div id="header-networth" class="text-wealth font-mono font-bold text-lg">$0.00</div>
+                    </div>
+                    <div class="h-8 w-8 rounded-full bg-gradient-to-tr from-wealth to-accent flex items-center justify-center text-white font-bold text-xs shadow-lg">YO</div>
+                </div>
+            </header>
+
+            <div id="app-container" class="p-6 md:p-10 max-w-7xl mx-auto pb-32"></div>
+
+        </main>
+    </div>
+
+    <div id="modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 fade-in">
+        <div class="bg-white dark:bg-cardDark w-full max-w-md rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 overflow-hidden">
+            <div class="p-6">
+                <h3 id="modal-title" class="text-lg font-bold mb-4 text-slate-800 dark:text-white">Add Item</h3>
+                <div id="modal-content" class="space-y-4"></div>
+            </div>
+            <div class="bg-gray-50 dark:bg-slate-900/50 p-4 flex justify-end gap-3 border-t border-gray-100 dark:border-slate-700">
+                <button onclick="closeModal()" class="px-4 py-2 text-sm font-medium text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">Cancel</button>
+                <button id="modal-action-btn" class="px-6 py-2 text-sm font-bold bg-wealth text-white rounded shadow-lg hover:bg-emerald-600 transition-all">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- STATE & CONFIG ---
+        let state = {
+            transactions: [], // { id, type: 'income'|'expense', category, amount, date, title }
+            investments: [],  // { id, name, type: 'Stock'|'Crypto'|'RealEstate', qty, pricePerUnit, currentPrice }
+            goals: [],        // { id, title, targetAmount, currentAmount, deadline }
+            settings: { currency: '$', theme: 'dark' }
+        };
+        const PIN = "0000"; // Simple hardcoded PIN for the demo
+        let myChart = null;
+
+        // --- LIFECYCLE ---
+        window.onload = () => {
+            loadData();
+            lucide.createIcons();
+            
+            // Check Lock
+            document.getElementById('pin-input').addEventListener('keypress', (e) => { if(e.key === 'Enter') attemptLogin(); });
+            
+            // Theme Init
+            if(state.settings.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+            updateThemeIcon();
+        };
+
+        function attemptLogin() {
+            const val = document.getElementById('pin-input').value;
+            if(val === PIN) {
+                document.getElementById('lock-screen').classList.add('unlocked');
+                setTimeout(() => renderTab('dashboard'), 500); // Render after unlock animation
+            } else {
+                document.getElementById('login-msg').innerText = "ACCESS DENIED";
+                document.getElementById('pin-input').value = '';
+            }
+        }
+
+        // --- DATA LAYER (LocalStorage) ---
+        function loadData() {
+            const raw = localStorage.getItem('wealth_data');
+            if(raw) state = JSON.parse(raw);
+            updateHeader();
+        }
+        function saveData() {
+            localStorage.setItem('wealth_data', JSON.stringify(state));
+            updateHeader();
+            refreshCurrentTab();
+        }
+        function updateHeader() {
+            const netWorth = calculateNetWorth();
+            document.getElementById('header-networth').innerText = formatMoney(netWorth);
+        }
+
+        // --- NAVIGATION ---
+        function renderTab(tab) {
+            // Update Active State
+            document.querySelectorAll('.nav-btn').forEach(b => {
+                b.classList.remove('active', 'bg-gray-100', 'dark:bg-slate-700', 'text-wealth');
+                b.classList.add('text-slate-500');
+            });
+            const btn = document.getElementById(`nav-${tab}`);
+            if(btn) {
+                btn.classList.add('active', 'bg-gray-100', 'dark:bg-slate-700', 'text-wealth');
+                btn.classList.remove('text-slate-500');
+            }
+
+            const c = document.getElementById('app-container');
+            const t = document.getElementById('page-title');
+            c.innerHTML = '';
+            
+            if(tab === 'dashboard') { t.innerText = "DASHBOARD"; renderDashboard(c); }
+            else if(tab === 'cashflow') { t.innerText = "CASH FLOW"; renderCashFlow(c); }
+            else if(tab === 'portfolio') { t.innerText = "PORTFOLIO"; renderPortfolio(c); }
+            else if(tab === 'goals') { t.innerText = "SAVING GOALS"; renderGoals(c); }
+            
+            lucide.createIcons();
+        }
+        
+        function refreshCurrentTab() {
+            const activeId = document.querySelector('.nav-btn.active')?.id.replace('nav-', '');
+            if(activeId) renderTab(activeId);
+        }
+
+        // --- DASHBOARD ---
+        function renderDashboard(c) {
+            const nw = calculateNetWorth();
+            const income = state.transactions.filter(t => t.type === 'income').reduce((a,b) => a + b.amount, 0);
+            const expense = state.transactions.filter(t => t.type === 'expense').reduce((a,b) => a + b.amount, 0);
+            
+            c.innerHTML = `
+                <div class="fade-in grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                    <div class="glass-panel p-6 rounded-2xl shadow-sm border-l-4 border-wealth bg-white dark:bg-cardDark">
+                        <div class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Total Net Worth</div>
+                        <div class="text-3xl font-mono font-bold text-slate-800 dark:text-white">${formatMoney(nw)}</div>
+                    </div>
+                    <div class="glass-panel p-6 rounded-2xl shadow-sm border-l-4 border-accent bg-white dark:bg-cardDark">
+                        <div class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Total Investments</div>
+                        <div class="text-3xl font-mono font-bold text-slate-800 dark:text-white">${formatMoney(calculateInvestments())}</div>
+                    </div>
+                    <div class="glass-panel p-6 rounded-2xl shadow-sm border-l-4 border-red-500 bg-white dark:bg-cardDark">
+                        <div class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Monthly Burn</div>
+                        <div class="text-3xl font-mono font-bold text-slate-800 dark:text-white">${formatMoney(expense)}</div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <div class="bg-white dark:bg-cardDark p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700">
+                        <h3 class="font-bold text-slate-700 dark:text-slate-200 mb-4 flex items-center gap-2"><i data-lucide="pie-chart" size="18"></i> Asset Allocation</h3>
+                        <canvas id="dashChart" height="250"></canvas>
+                    </div>
+
+                    <div class="bg-white dark:bg-cardDark p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700">
+                        <h3 class="font-bold text-slate-700 dark:text-slate-200 mb-4 flex items-center gap-2"><i data-lucide="activity" size="18"></i> Recent Transactions</h3>
+                        <div class="space-y-3">
+                            ${state.transactions.slice(0, 5).map(t => `
+                                <div class="flex justify-between items-center text-sm border-b border-gray-100 dark:border-slate-700 pb-2">
+                                    <div>
+                                        <div class="font-bold text-slate-700 dark:text-slate-300">${t.title}</div>
+                                        <div class="text-xs text-slate-400">${t.date} • ${t.category}</div>
+                                    </div>
+                                    <span class="font-mono font-bold ${t.type === 'income' ? 'text-wealth' : 'text-red-500'}">
+                                        ${t.type === 'income' ? '+' : '-'}${formatMoney(t.amount)}
+                                    </span>
+                                </div>
+                            `).join('')}
+                            ${state.transactions.length === 0 ? '<div class="text-slate-500 text-sm italic">No data yet.</div>' : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Render Chart
+            renderChart();
+        }
+
+        // --- CASH FLOW (Budgeting) ---
+        function renderCashFlow(c) {
+            c.innerHTML = `
+                <div class="fade-in space-y-6">
+                    <div class="flex justify-between items-end">
+                        <div class="hidden md:block text-sm text-slate-500 max-w-lg">Track your means of earning and daily expenses here. Budgeting is the first step to wealth.</div>
+                        <div class="flex gap-2">
+                            <button onclick="openTransactionModal('income')" class="bg-wealth hover:bg-emerald-600 text-white px-4 py-2 rounded-lg font-bold text-sm shadow-lg shadow-emerald-500/20 flex items-center gap-2"><i data-lucide="plus-circle" size="16"></i> Income</button>
+                            <button onclick="openTransactionModal('expense')" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg font-bold text-sm shadow-lg shadow-red-500/20 flex items-center gap-2"><i data-lucide="minus-circle" size="16"></i> Expense</button>
+                        </div>
+                    </div>
+
+                    <div class="bg-white dark:bg-cardDark rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden">
+                        <table class="w-full text-left text-sm text-slate-600 dark:text-slate-400">
+                            <thead class="bg-gray-50 dark:bg-slate-900/50 text-xs uppercase font-bold text-slate-500">
+                                <tr>
+                                    <th class="px-6 py-4">Date</th>
+                                    <th class="px-6 py-4">Description</th>
+                                    <th class="px-6 py-4">Category</th>
+                                    <th class="px-6 py-4 text-right">Amount</th>
+                                    <th class="px-6 py-4 text-center">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100 dark:divide-slate-700">
+                                ${state.transactions.map((t, i) => `
+                                    <tr class="hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors">
+                                        <td class="px-6 py-4 whitespace-nowrap font-mono text-xs">${t.date}</td>
+                                        <td class="px-6 py-4 font-medium text-slate-800 dark:text-slate-200">${t.title}</td>
+                                        <td class="px-6 py-4"><span class="px-2 py-1 rounded text-xs bg-gray-100 dark:bg-slate-800 border border-gray-200 dark:border-slate-600">${t.category}</span></td>
+                                        <td class="px-6 py-4 text-right font-mono font-bold ${t.type === 'income' ? 'text-wealth' : 'text-red-500'}">
+                                            ${t.type === 'income' ? '+' : '-'}${formatMoney(t.amount)}
+                                        </td>
+                                        <td class="px-6 py-4 text-center">
+                                            <button onclick="deleteTransaction(${i})" class="text-slate-400 hover:text-red-500"><i data-lucide="trash-2" size="16"></i></button>
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                        ${state.transactions.length === 0 ? '<div class="p-8 text-center text-slate-500">No transactions recorded.</div>' : ''}
+                    </div>
+                </div>
+            `;
+        }
+
+        // --- PORTFOLIO (Investments) ---
+        function renderPortfolio(c) {
+            const total = calculateInvestments();
+            c.innerHTML = `
+                <div class="fade-in space-y-6">
+                    <div class="flex justify-between items-center bg-indigo-900 text-white p-6 rounded-2xl shadow-lg relative overflow-hidden">
+                        <div class="relative z-10">
+                            <div class="text-indigo-200 text-xs font-bold uppercase tracking-widest mb-1">Portfolio Value</div>
+                            <div class="text-4xl font-mono font-bold">${formatMoney(total)}</div>
+                        </div>
+                        <button onclick="openInvestmentModal()" class="relative z-10 bg-white text-indigo-900 hover:bg-indigo-50 px-4 py-2 rounded-lg font-bold text-sm shadow-xl flex items-center gap-2">
+                            <i data-lucide="plus" size="16"></i> Add Asset
+                        </button>
+                        <div class="absolute right-0 bottom-0 opacity-10 transform translate-x-10 translate-y-10">
+                            <i data-lucide="trending-up" size="150"></i>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        ${state.investments.map((inv, i) => `
+                            <div class="bg-white dark:bg-cardDark p-5 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 hover:border-indigo-500 transition-colors group relative">
+                                <div class="flex justify-between items-start mb-4">
+                                    <div>
+                                        <h4 class="font-bold text-slate-800 dark:text-white text-lg">${inv.name}</h4>
+                                        <span class="text-xs bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-300 px-2 py-0.5 rounded font-bold uppercase">${inv.type}</span>
+                                    </div>
+                                    <div class="text-right">
+                                        <div class="font-mono font-bold text-slate-800 dark:text-slate-200">${formatMoney(inv.qty * inv.currentPrice)}</div>
+                                        <div class="text-xs text-slate-500">${inv.qty} @ ${inv.currentPrice}</div>
+                                    </div>
+                                </div>
+                                <button onclick="deleteInvestment(${i})" class="absolute top-4 right-4 opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition-opacity"><i data-lucide="x-circle" size="18"></i></button>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        // --- GOALS (Savings) ---
+        function renderGoals(c) {
+            c.innerHTML = `
+                <div class="fade-in">
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 class="text-slate-500 dark:text-slate-400 text-sm">Visualize your targets.</h3>
+                        <button onclick="openGoalModal()" class="bg-wealth hover:bg-emerald-600 text-white px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2"><i data-lucide="plus" size="16"></i> New Goal</button>
+                    </div>
+                    
+                    <div class="space-y-6">
+                        ${state.goals.map((g, i) => {
+                            const pct = Math.min(100, Math.round((g.currentAmount / g.targetAmount) * 100));
+                            return `
+                                <div class="bg-white dark:bg-cardDark p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700">
+                                    <div class="flex justify-between items-end mb-2">
+                                        <div>
+                                            <h4 class="font-bold text-lg text-slate-800 dark:text-white flex items-center gap-2">${g.title} <button onclick="deleteGoal(${i})" class="text-gray-300 hover:text-red-500"><i data-lucide="trash-2" size="14"></i></button></h4>
+                                            <div class="text-xs text-slate-400 font-mono">Target: ${formatMoney(g.targetAmount)}</div>
+                                        </div>
+                                        <div class="text-right">
+                                            <span class="text-2xl font-bold font-mono text-wealth">${pct}%</span>
+                                            <div class="text-xs text-slate-500">Saved: ${formatMoney(g.currentAmount)}</div>
+                                        </div>
+                                    </div>
+                                    <div class="w-full bg-gray-200 dark:bg-slate-700 h-3 rounded-full overflow-hidden">
+                                        <div class="bg-wealth h-full rounded-full transition-all duration-1000" style="width: ${pct}%"></div>
+                                    </div>
+                                    <div class="mt-4 flex gap-2 justify-end">
+                                        <button onclick="updateGoalAmount(${i}, 100)" class="text-xs border border-gray-300 dark:border-slate-600 px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-slate-700">+100</button>
+                                        <button onclick="updateGoalAmount(${i}, 500)" class="text-xs border border-gray-300 dark:border-slate-600 px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-slate-700">+500</button>
+                                        <button onclick="updateGoalAmount(${i}, 1000)" class="text-xs border border-gray-300 dark:border-slate-600 px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-slate-700">+1k</button>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        // --- MODAL ACTIONS ---
+        function closeModal() { document.getElementById('modal').classList.add('hidden'); }
+        
+        function openTransactionModal(type) {
+            const m = document.getElementById('modal');
+            m.classList.remove('hidden');
+            document.getElementById('modal-title').innerText = type === 'income' ? 'Record Income' : 'Record Expense';
+            document.getElementById('modal-content').innerHTML = `
+                <input id="tx-title" type="text" placeholder="Description (e.g. Salary, Rent)" class="w-full p-2 bg-transparent border-b border-gray-300 dark:border-slate-600 outline-none text-slate-800 dark:text-white">
+                <div class="flex gap-4">
+                    <input id="tx-amount" type="number" placeholder="Amount" class="flex-1 p-2 bg-transparent border-b border-gray-300 dark:border-slate-600 outline-none font-mono text-slate-800 dark:text-white">
+                    <select id="tx-cat" class="bg-transparent border-b border-gray-300 dark:border-slate-600 outline-none text-sm text-slate-500">
+                        <option value="General">General</option>
+                        <option value="Food">Food</option>
+                        <option value="Transport">Transport</option>
+                        <option value="Housing">Housing</option>
+                        <option value="Salary">Salary</option>
+                        <option value="Freelance">Freelance</option>
+                    </select>
+                </div>
+                <input id="tx-date" type="date" value="${new Date().toISOString().split('T')[0]}" class="w-full p-2 bg-transparent border-b border-gray-300 dark:border-slate-600 outline-none text-slate-500">
+            `;
+            document.getElementById('modal-action-btn').onclick = () => {
+                const title = document.getElementById('tx-title').value;
+                const amount = parseFloat(document.getElementById('tx-amount').value);
+                const category = document.getElementById('tx-cat').value;
+                const date = document.getElementById('tx-date').value;
+                if(title && amount) {
+                    state.transactions.unshift({ title, amount, category, date, type });
+                    saveData();
+                    closeModal();
+                }
+            };
+        }
+
+        function openInvestmentModal() {
+            const m = document.getElementById('modal');
+            m.classList.remove('hidden');
+            document.getElementById('modal-title').innerText = 'Add Asset';
+            document.getElementById('modal-content').innerHTML = `
+                <input id="inv-name" type="text" placeholder="Asset Name (e.g. AAPL, BTC)" class="w-full p-2 bg-transparent border-b border-gray-300 dark:border-slate-600 outline-none text-slate-800 dark:text-white">
+                <select id="inv-type" class="w-full p-2 bg-transparent border-b border-gray-300 dark:border-slate-600 outline-none text-slate-500 mt-2">
+                    <option value="Stock">Stock Market</option>
+                    <option value="Crypto">Cryptocurrency</option>
+                    <option value="RealEstate">Real Estate</option>
+                    <option value="Gold">Gold/Commodity</option>
+                    <option value="Cash">Cash Reserve</option>
+                </select>
+                <div class="flex gap-4 mt-2">
+                    <input id="inv-qty" type="number" placeholder="Quantity" class="flex-1 p-2 bg-transparent border-b border-gray-300 dark:border-slate-600 outline-none font-mono">
+                    <input id="inv-price" type="number" placeholder="Current Price" class="flex-1 p-2 bg-transparent border-b border-gray-300 dark:border-slate-600 outline-none font-mono">
+                </div>
+            `;
+            document.getElementById('modal-action-btn').onclick = () => {
+                const name = document.getElementById('inv-name').value;
+                const type = document.getElementById('inv-type').value;
+                const qty = parseFloat(document.getElementById('inv-qty').value);
+                const price = parseFloat(document.getElementById('inv-price').value);
+                if(name && qty && price) {
+                    state.investments.push({ name, type, qty, currentPrice: price });
+                    saveData();
+                    closeModal();
+                }
+            };
+        }
+
+        function openGoalModal() {
+            const m = document.getElementById('modal');
+            m.classList.remove('hidden');
+            document.getElementById('modal-title').innerText = 'Set Financial Goal';
+            document.getElementById('modal-content').innerHTML = `
+                <input id="goal-title" type="text" placeholder="Goal Name (e.g. New Car)" class="w-full p-2 bg-transparent border-b border-gray-300 dark:border-slate-600 outline-none text-slate-800 dark:text-white">
+                <input id="goal-target" type="number" placeholder="Target Amount" class="w-full p-2 bg-transparent border-b border-gray-300 dark:border-slate-600 outline-none font-mono mt-2">
+                <input id="goal-current" type="number" placeholder="Starting Balance" value="0" class="w-full p-2 bg-transparent border-b border-gray-300 dark:border-slate-600 outline-none font-mono mt-2">
+            `;
+            document.getElementById('modal-action-btn').onclick = () => {
+                const title = document.getElementById('goal-title').value;
+                const target = parseFloat(document.getElementById('goal-target').value);
+                const current = parseFloat(document.getElementById('goal-current').value) || 0;
+                if(title && target) {
+                    state.goals.push({ title, targetAmount: target, currentAmount: current });
+                    saveData();
+                    closeModal();
+                }
+            };
+        }
+
+        // --- UTILS & CALCULATIONS ---
+        function formatMoney(num) {
+            return '$' + num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+        function calculateInvestments() {
+            return state.investments.reduce((acc, inv) => acc + (inv.qty * inv.currentPrice), 0);
+        }
+        function calculateNetWorth() {
+            const cashIn = state.transactions.filter(t => t.type === 'income').reduce((a,b) => a+b.amount, 0);
+            const cashOut = state.transactions.filter(t => t.type === 'expense').reduce((a,b) => a+b.amount, 0);
+            const savings = state.goals.reduce((a,b) => a+b.currentAmount, 0); // Assuming goals money is separate? Or part of net worth. Let's add it.
+            const investments = calculateInvestments();
+            return (cashIn - cashOut) + investments; // Simple logic: Cash Flow + Asset Value
+        }
+        function deleteTransaction(idx) { if(confirm('Remove this entry?')) { state.transactions.splice(idx, 1); saveData(); } }
+        function deleteInvestment(idx) { if(confirm('Remove asset?')) { state.investments.splice(idx, 1); saveData(); } }
+        function deleteGoal(idx) { if(confirm('Delete goal?')) { state.goals.splice(idx, 1); saveData(); } }
+        function updateGoalAmount(idx, amount) { state.goals[idx].currentAmount += amount; saveData(); }
+        
+        // Theme Toggle
+        function toggleTheme() {
+            document.documentElement.classList.toggle('dark');
+            state.settings.theme = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+            updateThemeIcon();
+            saveData();
+        }
+        function updateThemeIcon() {
+            const isDark = document.documentElement.classList.contains('dark');
+            const icon = document.getElementById('theme-icon');
+            if(icon) {
+                icon.parentElement.innerHTML = `<i id="theme-icon" data-lucide="${isDark ? 'sun' : 'moon'}" size="20"></i> <span class="hidden md:block ml-3 text-xs font-bold uppercase">Theme</span>`;
+                lucide.createIcons();
+            }
+        }
+
+        // Chart.js
+        function renderChart() {
+            const ctx = document.getElementById('dashChart');
+            if(!ctx) return;
+            if(myChart) myChart.destroy();
+            
+            const investments = calculateInvestments();
+            const goals = state.goals.reduce((a,b)=>a+b.currentAmount,0);
+            const cash = Math.max(0, calculateNetWorth() - investments); // Remaining cash logic
+
+            myChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Investments', 'Cash/Savings'],
+                    datasets: [{
+                        data: [investments, cash],
+                        backgroundColor: ['#8b5cf6', '#10b981'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    cutout: '70%',
+                    plugins: { legend: { position: 'bottom' } }
+                }
+            });
+        }
+    </script>
+</body>
+</html>
